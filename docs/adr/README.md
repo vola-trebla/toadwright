@@ -7,3 +7,4 @@
 | [0003](0003-budgets-and-run-limits.md) | Budgets, run limits and pricing | Accepted |
 | [0004](0004-runner-agnostic-core.md) | Runner-agnostic core with thin adapters | Accepted |
 | [0005](0005-repository-home.md) | Repository home | Accepted |
+| [0006](0006-genai-semconv-version.md) | Pinned GenAI semantic conventions version | Accepted |

@@ -15,6 +15,7 @@ import { context, createContextKey } from '@opentelemetry/api';
 import { registerTelemetry } from 'ai';
 import { AsyncLocalStorageContextManager } from './context-manager.js';
 import { type RecordedSpan, RecordingTracer, RUN_KEY, type RunSpans } from './recording-tracer.js';
+import { ATTR } from './semconv.js';
 
 export interface CollectedRun<T> {
   readonly result: T;
@@ -67,7 +68,7 @@ export class ContextManagerError extends Error {
   }
 }
 
-const isGenAi = (span: RecordedSpan) => 'gen_ai.operation.name' in span.attributes;
+const isGenAi = (span: RecordedSpan) => ATTR.operationName in span.attributes;
 
 const PROBE = createContextKey('toadwright.context-probe');
 

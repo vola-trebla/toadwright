@@ -120,7 +120,7 @@ Goal: deterministic trajectory assertions on a single run.
 - [x] Detect spans still open when the test body returns (unconsumed streams): `OpenSpansError`.
 - [ ] `ContentNotRecordedError` when argument/result matchers meet `recordInputs/recordOutputs: false`.
 - [ ] `AgentTrace` model: normalize `invoke_agent` / `chat` / `execute_tool` spans; tool args/results; usage; `error.type`.
-- [ ] Pin a semconv version; isolate attribute names in one mapping module (the spec is still *Development*).
+- [x] Pin a semconv version; isolate attribute names in one mapping module (the spec is still *Development*): v1.41.0, `src/semconv.ts` ([ADR-006](docs/adr/0006-genai-semconv-version.md)).
 - [ ] Matchers: `toHaveCalledTool`, `toCallToolsInOrder`, `toHaveToolArgs`, `toStayWithin({ steps, tokens, costUsd })`, `toHaveErrors`, `toFinishWith(reason)`.
 - [ ] Readable failure diffs: show actual trajectory as a compact timeline.
 - [ ] First-class target: **Vercel AI SDK v7** native GenAI telemetry.

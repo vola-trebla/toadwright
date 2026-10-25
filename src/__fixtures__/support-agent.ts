@@ -5,8 +5,9 @@
 import { generateText, isStepCount, jsonSchema, streamText, type Telemetry, tool } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 
+/** Per model call. Cache tokens are part of the input total, as providers report them. */
 const usage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+  inputTokens: { total: 10, noCache: 6, cacheRead: 3, cacheWrite: 1 },
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 };
 
