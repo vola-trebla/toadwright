@@ -146,10 +146,16 @@ class RecordingSpan implements Span, RecordedSpan {
 
 export class RecordingTracer implements Tracer {
   private readonly finished: RecordedSpan[] = [];
+  private readonly open = new Set<RecordedSpan>();
 
   /** Finished spans in the order they ended. */
   getFinishedSpans(): readonly RecordedSpan[] {
     return this.finished;
+  }
+
+  /** Spans started but not ended yet, in start order. */
+  getOpenSpans(): readonly RecordedSpan[] {
+    return [...this.open];
   }
 
   startSpan(name: string, options: SpanOptions = {}, ctx: Context = contextApi.active()): Span {
@@ -160,9 +166,13 @@ export class RecordingTracer implements Tracer {
       options.kind ?? SpanKind.INTERNAL,
       parent,
       typeof runId === 'string' ? runId : undefined,
-      (s) => this.finished.push(s),
+      (s) => {
+        this.open.delete(s);
+        this.finished.push(s);
+      },
     );
     if (options.attributes) span.setAttributes(options.attributes);
+    this.open.add(span);
     return span;
   }
 
