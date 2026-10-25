@@ -149,10 +149,15 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
   `OpenSpansError` in `src/collector.ts`. AI SDK starts spans asynchronously, so the collector yields
   one macrotask after the body returns before it checks.
 - [ ] `ContentNotRecordedError` for argument/result matchers.
-- [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix (the log-only
+- [x] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix (the log-only
   tests are already assertions in the spike since the re-run).
   Cover both registration orders (app first, toadwright first) and an app-registered context
-  manager (finding 10).
+  manager (finding 10). Done — `src/scenarios/`, run against a real `NodeSDK` on both OTel lines
+  (SDK packages are dev-only). Each scenario asserts its own preconditions instead of assuming
+  them: a pristine worker, the actual integration order, the owner of the context manager.
+  `src/scenarios/app-context-manager.test.ts` covers finding 10 with the app's own
+  `AsyncLocalStorageContextManager`. S4's unrecorded-content case checks raw spans until
+  `ContentNotRecordedError` exists.
 
 ## Context-key re-run (2026-10-25)
 

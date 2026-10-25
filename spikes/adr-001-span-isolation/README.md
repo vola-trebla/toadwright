@@ -3,6 +3,10 @@
 Throwaway code that validated [ADR-001](../../docs/adr/0001-span-collection-and-isolation.md).
 Not part of the published package.
 
+> **Ported.** S1–S5 now live in the package's own suite, [`src/scenarios/`](../../src/scenarios/),
+> and run in CI on both OTel lines against the real collector. This spike is kept for history only;
+> change the package tests, not these.
+
 ```bash
 pnpm install
 pnpm test        # current stack (ends on the modern OTel line)
