@@ -116,7 +116,7 @@ Goal: deterministic trajectory assertions on a single run.
 - [ ] Small reproducible example agent → reach out to design partners (see §7).
 - [x] Span collector per ADR-001: API-only recording tracer, per-run context key, lazy context manager, `NoSpansCollectedError`.
 - [x] In-house AsyncLocalStorage context manager (drop `@opentelemetry/context-async-hooks`).
-- [ ] Port spike scenarios S1–S5 into the package test suite; run them on both OTel lines in CI.
+- [x] Port spike scenarios S1–S5 into the package test suite; run them on both OTel lines in CI (`src/scenarios/`).
 - [x] Detect spans still open when the test body returns (unconsumed streams): `OpenSpansError`.
 - [ ] `ContentNotRecordedError` when argument/result matchers meet `recordInputs/recordOutputs: false`.
 - [ ] `AgentTrace` model: normalize `invoke_agent` / `chat` / `execute_tool` spans; tool args/results; usage; `error.type`.
