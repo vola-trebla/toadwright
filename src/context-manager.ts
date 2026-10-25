@@ -13,8 +13,15 @@ import { type Context, type ContextManager, ROOT_CONTEXT } from '@opentelemetry/
 
 export class AsyncLocalStorageContextManager implements ContextManager {
   private readonly storage = new AsyncLocalStorage<Context>();
+  /**
+   * Set by disable(), cleared by the next with(). Node 24's AsyncContextFrame keeps the store of
+   * in-flight operations after AsyncLocalStorage.disable(), contrary to its docs; Node 22 clears it.
+   * The flag gives the documented behavior on every runtime.
+   */
+  private disabled = false;
 
   active(): Context {
+    if (this.disabled) return ROOT_CONTEXT;
     return this.storage.getStore() ?? ROOT_CONTEXT;
   }
 
@@ -24,6 +31,7 @@ export class AsyncLocalStorageContextManager implements ContextManager {
     thisArg?: ThisParameterType<F>,
     ...args: A
   ): ReturnType<F> {
+    this.disabled = false;
     const callback = thisArg == null ? fn : fn.bind(thisArg);
     return this.storage.run(context, callback, ...args);
   }
@@ -46,10 +54,11 @@ export class AsyncLocalStorageContextManager implements ContextManager {
   }
 
   /**
-   * Disables the underlying storage: every async operation, including ones already in flight, sees
-   * `ROOT_CONTEXT` until the next `with()` call.
+   * Disables the manager: every async operation, including ones already in flight, sees
+   * `ROOT_CONTEXT` until the next `with()` call — on Node 22 and 24 alike.
    */
   disable(): this {
+    this.disabled = true;
     this.storage.disable();
     return this;
   }
