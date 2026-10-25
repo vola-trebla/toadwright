@@ -11,7 +11,7 @@ pnpm test        # current stack (ends on the modern OTel line)
 
 | Scenario | What it proves |
 |---|---|
-| `s1-clean-env` | No app telemetry: full `gen_ai` tree is captured under the test root span; no global provider registered; context manager installed lazily |
+| `s1-clean-env` | No app telemetry: full `gen_ai` tree is captured and tagged with the run id; no global provider registered; context manager installed lazily |
 | `s2-isolation` | 50 interleaved runs in one `Promise.all` + 10 `describe.concurrent` tests never leak spans |
 | `s3-app-first` | App bootstraps `NodeSDK` first: app's exported span shape (names, parents, attributes) is identical to a run without toadwright; no diag warnings. `rootspan` fails here by design |
 | `s4-failure-modes` | Disabled telemetry, per-call integration override and lost async context fail loudly; `recordInputs:false` hides tool args |
