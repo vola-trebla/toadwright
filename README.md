@@ -15,7 +15,8 @@ the first matchers work end to end. The example below is the target API.
 - 🚧 **M1 — "Assert":** span collection and trajectory assertions on a single run.
   - ✅ API-only recording tracer that tags spans per test run
   - ✅ In-house AsyncLocalStorage context manager
-  - ⏳ Span collector, `agentTest`, first matchers
+  - ✅ Span collector that fails loudly on empty runs and unconsumed streams
+  - ⏳ `agentTest`, first matchers
 - ⏳ **M2 — "Repeat":** N runs, pass-rate gate with confidence interval, budgets.
 - ⏳ **M3 — "Replay":** deterministic CI runs from recorded fixtures.
 

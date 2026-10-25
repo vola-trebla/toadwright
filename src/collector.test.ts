@@ -1,7 +1,7 @@
 import { context, DiagLogLevel, diag, ROOT_CONTEXT } from '@opentelemetry/api';
 import { generateText, isStepCount, jsonSchema, streamText, tool } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ensureContextManager, getCollector, NoSpansCollectedError, OpenSpansError } from './collector.js';
 
 const usage = {
@@ -9,14 +9,14 @@ const usage = {
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
 /** Scripted support agent: lookup_order, then a final answer. Jitter interleaves parallel runs. */
-async function runAgent(orderId: string, telemetry: { isEnabled?: boolean } = {}) {
+async function runAgent(orderId: string, telemetry: { isEnabled?: boolean } = {}, jitterMs = 10) {
   let call = 0;
   const model = new MockLanguageModelV4({
     doGenerate: async () => {
-      await sleep(Math.random() * 10);
+      await sleep(Math.random() * jitterMs);
       call += 1;
       return call === 1
         ? {
@@ -43,7 +43,7 @@ async function runAgent(orderId: string, telemetry: { isEnabled?: boolean } = {}
   const lookupOrder = tool({
     inputSchema: jsonSchema<{ orderId: string }>({ type: 'object', properties: { orderId: { type: 'string' } } }),
     execute: async ({ orderId: id }) => {
-      await sleep(Math.random() * 10);
+      await sleep(Math.random() * jitterMs);
       return { orderId: id, total: 42 };
     },
   });
@@ -61,10 +61,23 @@ const operations = (spans: readonly { attributes: Readonly<Record<string, unknow
   spans.map((s) => s.attributes['gen_ai.operation.name']).filter((op) => op !== undefined);
 
 describe('collector', () => {
+  afterEach(() => vi.useRealTimers());
+
   it("returns the result and the run's gen_ai spans", async () => {
     const { result, spans } = await getCollector().run('single run', () => runAgent('A-1'));
     expect(result).toBe('Order A-1 found.');
     expect(operations(spans)).toEqual(expect.arrayContaining(['invoke_agent', 'chat', 'execute_tool']));
+    // One connected tree: every span but the agent root has its parent among the run's spans.
+    const ids = new Set(spans.map((s) => s.spanContext().spanId));
+    const roots = spans.filter((s) => s.parentSpanContext === undefined || !ids.has(s.parentSpanContext.spanId));
+    expect(operations(roots)).toEqual(['invoke_agent']);
+  });
+
+  it('does not hang under fake timers', async () => {
+    // The test never advances the clock: nothing in the collector may wait on a fakeable timer.
+    vi.useFakeTimers();
+    const run = getCollector().run('fake timers', () => runAgent('F-1', {}, 0));
+    await expect(run).resolves.toMatchObject({ result: 'Order F-1 found.' });
   });
 
   it('keeps parallel runs apart', async () => {
@@ -95,13 +108,14 @@ describe('collector', () => {
     }
   });
 
-  it('is one instance per process and registers its integration once', () => {
-    const integrations = () =>
-      (globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] }).AI_SDK_TELEMETRY_INTEGRATIONS;
-    const before = integrations()?.length;
-    expect(getCollector()).toBe(getCollector());
-    expect(before).toBe(1);
-    expect(integrations()?.length).toBe(1);
+  it('is one instance per process, even across module copies, and registers its integration once', async () => {
+    const collector = getCollector();
+    vi.resetModules();
+    const copy: typeof import('./collector.js') = await import('./collector.js');
+    expect(copy.getCollector).not.toBe(getCollector);
+    expect(copy.getCollector()).toBe(collector);
+    const { AI_SDK_TELEMETRY_INTEGRATIONS } = globalThis as { AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[] };
+    expect(AI_SDK_TELEMETRY_INTEGRATIONS).toHaveLength(1);
   });
 
   it('fails loudly when telemetry is disabled', async () => {

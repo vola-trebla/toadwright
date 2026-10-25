@@ -32,9 +32,11 @@ The OTel JS ecosystem is mid-transition: `@opentelemetry/api` 1.10 and SDK 3.0 s
    its id. toadwright creates **no span of its own**, so the app's span tree is unchanged. (The
    original design — a per-test root span plus a trace-id filter — gave the app's root span an
    unexported parent; see finding 5 and "Context-key re-run" below.)
-4. **Context manager only if missing, installed lazily.** On the first test run, a probe checks
-   whether `context.with()` propagates values. If not, toadwright installs an AsyncLocalStorage
-   context manager. If the app already has one, toadwright reuses it.
+4. **Context manager only if missing, installed lazily.** Before every run (the app's SDK may start
+   after toadwright loads), a probe checks whether `context.with()` propagates values. If it does,
+   toadwright reuses that manager and registers nothing. If none is registered, it installs its own
+   AsyncLocalStorage manager. If a non-propagating manager is registered, registration would fail,
+   so the run fails with `ContextManagerError` instead of misattributing spans.
 5. **Hands off globals.** toadwright never calls `trace.setGlobalTracerProvider`,
    `propagation.setGlobalPropagator`, or `diag.setLogger`.
 6. **Dependency policy.**
@@ -45,9 +47,10 @@ The OTel JS ecosystem is mid-transition: `@opentelemetry/api` 1.10 and SDK 3.0 s
    - No `@opentelemetry/sdk-*` packages.
    - The context manager becomes an in-house ~50-line AsyncLocalStorage implementation in M1,
      replacing `@opentelemetry/context-async-hooks`, whose peer range caps the API at `<1.11`.
-7. **Loud failure.** If a test captured zero `gen_ai` spans, it fails with `NoSpansCollectedError`
-   and a diagnosis: spans found in another trace → "async context was lost"; none at all →
-   "telemetry disabled or overridden per call".
+7. **Loud failure.** If a run captured zero `gen_ai` spans, it fails with `NoSpansCollectedError`
+   and a diagnosis: root spans without a run id ended during the run → "async context was lost";
+   none → "telemetry disabled or overridden per call". Spans of the run still open after the body
+   returns fail with `OpenSpansError`.
 
 ## Spike results
 
@@ -108,6 +111,23 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
    detection). Irrelevant to the recording tracer, which records synchronously on `span.end()`.
 9. **pnpm 12 enforces a minimum release age** for dependencies. Brand-new versions (published the
    same day) are rejected; the spike pins versions ≥ 1 day old.
+10. **Integration order decides whose span is active inside tools and provider calls** (milestone
+    review, 2026-10-25). AI SDK nests the `executeTool` / `executeLanguageModelCall` wrappers so
+    that the integration registered first runs innermost, and `@ai-sdk/otel` makes its own span
+    active there. With toadwright registered first, spans the app creates inside a tool or a
+    provider call (HTTP, DB instrumentation) were parented on an unexported toadwright span.
+    **Resolved:** toadwright's integration passes both wrappers through and never sets the active
+    context. Its own spans are unaffected, because `@ai-sdk/otel` parents them from contexts it
+    stores per call.
+11. **Sub-agent nesting is not reconstructed from parentage.** A nested agent's root span takes its
+    parent from the active context inside the tool. That is the app's tool span (an id toadwright
+    never records) or, with a no-op app tracer, an invalid span context. Invalid parents are
+    dropped, so a nested agent shows up as a second root of the run. `AgentTrace` must link nested
+    agents some other way (for example by `gen_ai.tool.call.id`, or a private context key) if it
+    needs the nesting.
+12. **The open-span check sees only what has started.** The collector yields one macrotask after the
+    body returns, which catches a stream that was never awaited. A body that schedules a further
+    model call later (a timer, I/O) and returns early still passes with a partial trajectory.
 
 ## Consequences
 
@@ -130,6 +150,8 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
 - [ ] `ContentNotRecordedError` for argument/result matchers.
 - [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix (the log-only
   tests are already assertions in the spike since the re-run).
+  Cover both registration orders (app first, toadwright first) and an app-registered context
+  manager (finding 10).
 
 ## Context-key re-run (2026-10-25)
 
