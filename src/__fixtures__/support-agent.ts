@@ -40,7 +40,9 @@ function scriptedModel(orderId: string, jitterMs: number) {
   });
 }
 
-function tools(jitterMs: number) {
+type ToolHook = (toolName: string) => void;
+
+function tools(jitterMs: number, onToolExecute: ToolHook) {
   return {
     lookup_order: tool({
       inputSchema: jsonSchema<{ orderId: string }>({
@@ -50,6 +52,7 @@ function tools(jitterMs: number) {
       }),
       execute: async ({ orderId }) => {
         await sleep(Math.random() * jitterMs);
+        onToolExecute('lookup_order');
         return { orderId, total: 42 };
       },
     }),
@@ -61,6 +64,7 @@ function tools(jitterMs: number) {
       }),
       execute: async ({ orderId, amount }) => {
         await sleep(Math.random() * jitterMs);
+        onToolExecute('issue_refund');
         return { orderId, refunded: amount };
       },
     }),
@@ -71,6 +75,8 @@ export interface SupportAgentOptions {
   readonly orderId: string;
   /** Random delay (ms) before each model and tool call, so parallel runs interleave. */
   readonly jitterMs?: number;
+  /** Runs inside each tool's execute, e.g. to create the app's own DB span there. */
+  readonly onToolExecute?: ToolHook;
   readonly telemetry?: {
     readonly isEnabled?: boolean;
     readonly recordInputs?: boolean;
@@ -79,10 +85,15 @@ export interface SupportAgentOptions {
   };
 }
 
-export async function runSupportAgent({ orderId, jitterMs = 0, telemetry }: SupportAgentOptions): Promise<string> {
+export async function runSupportAgent({
+  orderId,
+  jitterMs = 0,
+  onToolExecute = () => {},
+  telemetry,
+}: SupportAgentOptions): Promise<string> {
   const res = await generateText({
     model: scriptedModel(orderId, jitterMs),
-    tools: tools(jitterMs),
+    tools: tools(jitterMs, onToolExecute),
     stopWhen: isStepCount(5),
     prompt: `Refund order ${orderId}`,
     telemetry: { functionId: 'support-agent', ...telemetry },
