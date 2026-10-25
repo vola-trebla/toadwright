@@ -44,7 +44,8 @@ The OTel JS ecosystem is mid-transition: `@opentelemetry/api` 1.10 and SDK 3.0 s
      Never a direct dependency.
    - `ai` (`^7.0.0`), `@ai-sdk/otel` (`^1.0.0`) and, optionally, `vitest` (`^5.0.0`): peer dependencies.
      Ranges never promise more than CI tests.
-   - No `@opentelemetry/sdk-*` packages.
+   - No `@opentelemetry/sdk-*` packages at runtime (dependencies, peers, published `dist`). They are
+     allowed as devDependencies so the scenario tests can boot a real `NodeSDK` on both OTel lines.
    - The context manager becomes an in-house ~50-line AsyncLocalStorage implementation in M1,
      replacing `@opentelemetry/context-async-hooks`, whose peer range caps the API at `<1.11`.
 7. **Loud failure.** If a run captured zero `gen_ai` spans, it fails with `NoSpansCollectedError`

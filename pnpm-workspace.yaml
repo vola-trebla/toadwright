@@ -1,0 +1,4 @@
+# Dependency install scripts stay off unless a dependency needs one to work.
+# protobufjs comes in through @opentelemetry/sdk-node (dev only, for tests); its postinstall is not needed.
+allowBuilds:
+  protobufjs: false
