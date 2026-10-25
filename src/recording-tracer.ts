@@ -1,5 +1,5 @@
 /**
- * A minimal OpenTelemetry `Tracer` that records finished spans in memory.
+ * A minimal OpenTelemetry `Tracer` that records spans in memory, bucketed by run.
  *
  * It depends only on `@opentelemetry/api`, so toadwright never pulls an SDK that could conflict with
  * the app's SDK 2.x / 3.x line (ADR-001). It is never registered globally.
@@ -13,6 +13,7 @@ import {
   createContextKey,
   type Exception,
   type HrTime,
+  isSpanContextValid,
   type Link,
   type Span,
   type SpanContext,
@@ -49,8 +50,9 @@ export interface RecordedSpan {
   spanContext(): SpanContext;
 }
 
+/** Epoch time, as OpenTelemetry's `HrTime` expects, with sub-millisecond resolution. */
 const now = (): HrTime => {
-  const ns = process.hrtime.bigint();
+  const ns = BigInt(Math.round((performance.timeOrigin + performance.now()) * 1e6));
   return [Number(ns / 1_000_000_000n), Number(ns % 1_000_000_000n)];
 };
 
@@ -144,35 +146,59 @@ class RecordingSpan implements Span, RecordedSpan {
   }
 }
 
-export class RecordingTracer implements Tracer {
-  private readonly finished: RecordedSpan[] = [];
-  private readonly open = new Set<RecordedSpan>();
-
+export interface RunSpans {
   /** Finished spans in the order they ended. */
-  getFinishedSpans(): readonly RecordedSpan[] {
-    return this.finished;
+  readonly finished: readonly RecordedSpan[];
+  /** Spans started but not ended yet, in start order. */
+  readonly open: readonly RecordedSpan[];
+}
+
+interface RunBucket {
+  readonly finished: RecordedSpan[];
+  readonly open: Set<RecordedSpan>;
+}
+
+export class RecordingTracer implements Tracer {
+  /** Only runs between beginRun() and takeRun() keep spans, so memory does not grow across runs. */
+  private readonly runs = new Map<string, RunBucket>();
+  private untaggedRoots = 0;
+
+  beginRun(runId: string): void {
+    this.runs.set(runId, { finished: [], open: new Set() });
   }
 
-  /** Spans started but not ended yet, in start order. */
-  getOpenSpans(): readonly RecordedSpan[] {
-    return [...this.open];
+  /** Returns the run's spans and forgets them. Spans of the run that end later are dropped. */
+  takeRun(runId: string): RunSpans {
+    const bucket = this.runs.get(runId);
+    this.runs.delete(runId);
+    return { finished: bucket?.finished ?? [], open: [...(bucket?.open ?? [])] };
+  }
+
+  /**
+   * Root spans that ended with no run id, counted rather than stored. A rise during a run that
+   * captured nothing points at lost async context.
+   */
+  get untaggedRootSpanCount(): number {
+    return this.untaggedRoots;
   }
 
   startSpan(name: string, options: SpanOptions = {}, ctx: Context = contextApi.active()): Span {
-    const parent = options.root ? undefined : trace.getSpanContext(ctx);
-    const runId = ctx.getValue(RUN_KEY);
-    const span = new RecordingSpan(
-      name,
-      options.kind ?? SpanKind.INTERNAL,
-      parent,
-      typeof runId === 'string' ? runId : undefined,
-      (s) => {
-        this.open.delete(s);
-        this.finished.push(s);
-      },
-    );
+    // An invalid parent (a no-op tracer's span) is no parent: record a root, not trace id 000…0.
+    const active = options.root ? undefined : trace.getSpanContext(ctx);
+    const parent = active && isSpanContextValid(active) ? active : undefined;
+    const tag = ctx.getValue(RUN_KEY);
+    const runId = typeof tag === 'string' ? tag : undefined;
+    const span = new RecordingSpan(name, options.kind ?? SpanKind.INTERNAL, parent, runId, (s) => {
+      if (runId === undefined) {
+        if (parent === undefined) this.untaggedRoots += 1;
+        return;
+      }
+      const bucket = this.runs.get(runId);
+      bucket?.open.delete(s);
+      bucket?.finished.push(s);
+    });
     if (options.attributes) span.setAttributes(options.attributes);
-    this.open.add(span);
+    if (runId !== undefined) this.runs.get(runId)?.open.add(span);
     return span;
   }
 

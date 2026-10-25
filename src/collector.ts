@@ -2,17 +2,19 @@
  * Span collector (ADR-001, as amended).
  *
  * - A private `RecordingTracer` is handed to AI SDK as an extra telemetry integration.
- *   `registerTelemetry` appends, so the app's own integrations keep working.
+ *   `registerTelemetry` appends, so the app's own integrations keep working. The integration is
+ *   passive: it never makes its spans active, so the app's spans keep the app's parents.
  * - Each run executes with a `toadwright.run` context value. The tracer tags every span with it,
  *   so toadwright creates no spans of its own and the app's span tree stays untouched.
  * - A context manager is installed only when none works, and nothing else global is written.
  */
 import { randomUUID } from 'node:crypto';
+import { setImmediate as nextMacrotask } from 'node:timers/promises';
 import { OpenTelemetry } from '@ai-sdk/otel';
 import { context, createContextKey } from '@opentelemetry/api';
 import { registerTelemetry } from 'ai';
 import { AsyncLocalStorageContextManager } from './context-manager.js';
-import { type RecordedSpan, RecordingTracer, RUN_KEY } from './recording-tracer.js';
+import { type RecordedSpan, RecordingTracer, RUN_KEY, type RunSpans } from './recording-tracer.js';
 
 export interface CollectedRun<T> {
   readonly result: T;
@@ -54,6 +56,17 @@ export class OpenSpansError extends Error {
   }
 }
 
+export class ContextManagerError extends Error {
+  override readonly name = 'ContextManagerError';
+
+  constructor() {
+    super(
+      'toadwright: a context manager is registered but does not propagate context.with(), and it cannot be ' +
+        'replaced. Spans cannot be attributed to runs. Register a working one (e.g. NodeSDK does) or none.',
+    );
+  }
+}
+
 const isGenAi = (span: RecordedSpan) => 'gen_ai.operation.name' in span.attributes;
 
 const PROBE = createContextKey('toadwright.context-probe');
@@ -65,12 +78,31 @@ export const hasWorkingContextManager = (): boolean =>
 /** Installs toadwright's context manager if none works. Returns true when it installed one. */
 export function ensureContextManager(): boolean {
   if (hasWorkingContextManager()) return false;
-  return context.setGlobalContextManager(new AsyncLocalStorageContextManager());
+  if (!context.setGlobalContextManager(new AsyncLocalStorageContextManager())) throw new ContextManagerError();
+  return true;
+}
+
+/**
+ * AI SDK nests `executeTool` / `executeLanguageModelCall` wrappers so that the integration
+ * registered first runs innermost, and @ai-sdk/otel makes its own span active there. If toadwright
+ * registered first, spans the app creates inside a tool or a provider call (HTTP, DB) would get a
+ * toadwright span as parent, which is never exported (ADR-001, finding 10). Passing both through
+ * keeps the active context the app's own. Toadwright's spans do not need it: @ai-sdk/otel parents
+ * them from contexts it stores per call.
+ */
+class PassiveOpenTelemetry extends OpenTelemetry {
+  override executeTool<T>({ execute }: { execute: () => PromiseLike<T> }): PromiseLike<T> {
+    return execute();
+  }
+
+  override executeLanguageModelCall<T>({ execute }: { execute: () => PromiseLike<T> }): PromiseLike<T> {
+    return execute();
+  }
 }
 
 function createCollector(): Collector {
   const tracer = new RecordingTracer();
-  registerTelemetry(new OpenTelemetry({ tracer }));
+  registerTelemetry(new PassiveOpenTelemetry({ tracer }));
   let installedContextManager = false;
 
   return {
@@ -78,28 +110,31 @@ function createCollector(): Collector {
       return installedContextManager;
     },
 
-    async run(testName, fn) {
+    async run<T>(testName: string, fn: () => T | Promise<T>): Promise<CollectedRun<T>> {
       // Checked per run, not at import: the app's SDK may start after toadwright is loaded.
       if (ensureContextManager()) installedContextManager = true;
 
       const runId = randomUUID();
-      const startedAt = tracer.getFinishedSpans().length;
-      const result = await context.with(context.active().setValue(RUN_KEY, runId), fn);
-      // AI SDK starts spans asynchronously: let pending callbacks run so a stream the body never
-      // awaited shows up as open spans instead of as "no spans".
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      const untaggedBefore = tracer.untaggedRootSpanCount;
+      tracer.beginRun(runId);
+      let result: T;
+      let taken: RunSpans;
+      try {
+        result = await context.with(context.active().setValue(RUN_KEY, runId), fn);
+        // AI SDK starts spans asynchronously: let pending callbacks run so a stream the body never
+        // awaited shows up as open spans instead of as "no spans". The promise form from
+        // node:timers/promises is not replaced by fake timers, so vi.useFakeTimers() cannot hang it.
+        await nextMacrotask();
+      } finally {
+        // Always forget the run, also when the body throws, so memory does not grow across runs.
+        taken = tracer.takeRun(runId);
+      }
+      const { finished: spans, open } = taken;
 
-      const open = tracer.getOpenSpans().filter((s) => s.runId === runId);
       if (open.length > 0) throw new OpenSpansError(testName, open);
-
-      const spans = tracer.getFinishedSpans().filter((s) => s.runId === runId);
       if (!spans.some(isGenAi)) {
-        // Root gen_ai spans with no run id that ended meanwhile point at lost async context.
-        const orphans = tracer
-          .getFinishedSpans()
-          .slice(startedAt)
-          .filter((s) => s.runId === undefined && s.parentSpanContext === undefined && isGenAi(s));
-        throw new NoSpansCollectedError(testName, orphans.length);
+        // Root spans with no run id that ended meanwhile point at lost async context.
+        throw new NoSpansCollectedError(testName, tracer.untaggedRootSpanCount - untaggedBefore);
       }
       return { result, spans };
     },
