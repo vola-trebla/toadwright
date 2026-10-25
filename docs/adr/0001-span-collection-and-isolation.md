@@ -1,7 +1,7 @@
 # ADR-001: Span collection and per-test isolation
 
 - **Status:** Accepted — validated by spike [`spikes/adr-001-span-isolation`](../../spikes/adr-001-span-isolation/)
-- **Date:** 2026-10-24
+- **Date:** 2026-10-24 · **Amended:** 2026-10-25 (decision 3: context key instead of a root span)
 - **Deciders:** maintainer
 
 ## Context
@@ -26,8 +26,12 @@ The OTel JS ecosystem is mid-transition: `@opentelemetry/api` 1.10 and SDK 3.0 s
 2. **Additional AI SDK integration.** toadwright calls
    `registerTelemetry(new OpenTelemetry({ tracer: recordingTracer }))`. `registerTelemetry` appends
    to a global list, so it runs next to the app's integration, which keeps exporting unchanged.
-3. **Per-test root span.** Each test body runs inside `startActiveSpan('toadwright.test …')`.
-   Only spans sharing that root's trace id belong to the test.
+3. **Per-run context key** (amended 2026-10-25). Each test run executes inside
+   `context.with(ctx.setValue(RUN_KEY, runId), fn)`. The recording tracer reads `RUN_KEY` from the
+   context every span starts in and tags the span with it; a run owns exactly the spans tagged with
+   its id. toadwright creates **no span of its own**, so the app's span tree is unchanged. (The
+   original design — a per-test root span plus a trace-id filter — gave the app's root span an
+   unexported parent; see finding 5 and "Context-key re-run" below.)
 4. **Context manager only if missing, installed lazily.** On the first test run, a probe checks
    whether `context.with()` propagates values. If not, toadwright installs an AsyncLocalStorage
    context manager. If the app already has one, toadwright reuses it.
@@ -92,9 +96,8 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
    exist, so argument matchers must fail with "content not recorded", not "arguments mismatch".
 5. **Cross-provider parentage.** The app's `invoke_agent` span is parented on the toadwright test
    span, whose id the app never exports. With toadwright active, the app's exported trace therefore
-   has a missing root. The spike only compared span **names**, so this is not covered by an assertion.
-   Test environments only; documented. A context-key design that leaves the app's tree untouched is
-   the first M1 spike (see follow-ups).
+   had a missing root. The first spike only compared span **names**, so no assertion caught it.
+   **Resolved** by decision 3 as amended.
 6. **Init order matters only for the context manager.** If toadwright installs it before the app's
    `NodeSDK.start()`, the API logs one "duplicate registration of API: context" error. App telemetry
    keeps working because both managers are AsyncLocalStorage-based. Mitigation: lazy install plus docs
@@ -109,24 +112,35 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
 ## Consequences
 
 - ✅ Works on both OTel lines with one code path and zero SDK dependencies.
-- ✅ The app exports the same spans with the same attributes, with and without toadwright.
-- ⚠️ Not identical: the app's root `gen_ai` span is parented on an unexported toadwright span
-  (finding 5). Test environments only.
+- ✅ The app exports identical spans with and without toadwright: names, parents and attributes
+  (span ids, timestamps, `gen_ai.response.id` and timing attributes excluded).
 - ⚠️ We own a small `Tracer`/`Span` implementation. The API surface is stable 1.x, but new optional
   methods must be tracked.
 - ⚠️ v0.x supports AI SDK 7 natively. Other instrumentations need their own adapter (M4).
 
 ### Follow-ups for M1
 
-- [ ] **Spike first:** replace the per-test root span with a context key (`toadwright.run`) and
-  bucket spans by it in the recording tracer, so the app's span tree is unchanged. Re-run S1–S5;
-  if it holds, supersede the root-span part of this ADR.- [ ] In-house AsyncLocalStorage context manager; re-run the spike suite against it.
+- [x] **Spike first:** replace the per-test root span with a context key (`toadwright.run`) and
+  bucket spans by it in the recording tracer. Done — see "Context-key re-run".- [ ] In-house AsyncLocalStorage context manager; re-run the spike suite against it.
 - [ ] Detect spans still open when the test body returns ("2 spans still open — did you consume the stream?").
 - [ ] `ContentNotRecordedError` for argument/result matchers.
-- [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix. Turn the
-  log-only tests into assertions: app root parent id, exactly one diag error matching
-  "duplicate registration of API: context"; drop the filler assertion. Compare span shape
-  (parent, attributes), not only names.
+- [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix (the log-only
+  tests are already assertions in the spike since the re-run).
+
+## Context-key re-run (2026-10-25)
+
+Same spike, `TOADWRIGHT_DESIGN=ctxkey` vs `rootspan`, recording tracer only (the SDK-provider
+variant was dropped: ADR-001 already rejected it). The three log-only tests became assertions,
+and S3 now compares the app's exported span **shape** (name, parent, attributes) against a baseline
+run without toadwright.
+
+| Design | Legacy line | Modern line |
+|---|---|---|
+| `ctxkey` | 27/27 ✅ | 27/27 ✅ |
+| `rootspan` | 25/27 — fails "identical spans" and "app root stays a true root" | same |
+
+The `rootspan` failures are exactly finding 5, so the new S3 assertions have teeth. Mutation checks
+on `ctxkey` (no run-id filter, no context manager, tracer drops the run id) turn 16–18 tests red.
 
 ## Alternatives considered
 

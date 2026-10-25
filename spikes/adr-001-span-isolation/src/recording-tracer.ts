@@ -20,14 +20,20 @@ import {
   type SpanStatus,
   type TimeInput,
   type Tracer,
+  createContextKey,
 } from '@opentelemetry/api';
 import { randomBytes } from 'node:crypto';
+
+/** Context key that tags everything started inside one toadwright run. */
+export const RUN_KEY = createContextKey('toadwright.run');
 
 export interface RecordedSpan {
   name: string;
   kind: SpanKind;
   spanContext(): SpanContext;
   parentSpanContext?: SpanContext;
+  /** Run id from the context the span was started in (ctx-key design). */
+  runId?: string;
   attributes: Attributes;
   events: { name: string; attributes?: Attributes }[];
   status: SpanStatus;
@@ -48,6 +54,7 @@ class RecordingSpan implements Span, RecordedSpan {
   status: SpanStatus = { code: SpanStatusCode.UNSET };
   startTime: HrTime = now();
   endTime?: HrTime;
+  runId?: string;
   private readonly ctx: SpanContext;
 
   constructor(
@@ -103,7 +110,10 @@ export class RecordingTracer implements Tracer {
 
   startSpan(name: string, options: SpanOptions = {}, ctx: Context = otelContext.active()): Span {
     const parent = options.root ? undefined : trace.getSpanContext(ctx);
-    return new RecordingSpan(name, options.kind ?? SpanKind.INTERNAL, parent, (s) => this.finished.push(s), options.attributes);
+    const span = new RecordingSpan(name, options.kind ?? SpanKind.INTERNAL, parent, (s) => this.finished.push(s), options.attributes);
+    const runId = ctx.getValue(RUN_KEY);
+    if (typeof runId === 'string') span.runId = runId;
+    return span;
   }
 
   startActiveSpan<F extends (span: Span) => unknown>(name: string, ...args: unknown[]): ReturnType<F> {
