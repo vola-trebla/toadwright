@@ -24,7 +24,9 @@ never bypass it; pin a version that is at least a day old instead.
 
 1. **Never break the app's telemetry** (ADR-001). No `trace.setGlobalTracerProvider`,
    `propagation.setGlobalPropagator` or `diag.setLogger`. Install a context manager only when none
-   works. The app must export the same spans with and without toadwright.
+   works. The app must export the same spans with the same attributes with and without toadwright.
+   Known exception until the M1 spike: the app's root `gen_ai` span gets an unexported toadwright
+   parent (ADR-001, finding 5).
 2. **No OpenTelemetry SDK dependency** (ADR-001). `@opentelemetry/api` is a peer dependency only,
    never a direct one. No `@opentelemetry/sdk-*` packages. New runtime dependencies need an ADR.
 3. **Never pass vacuously** (ADR-001). Zero captured `gen_ai` spans, unrecorded content, or
@@ -44,7 +46,8 @@ never bypass it; pin a version that is at least a day old instead.
 - Small focused modules, flat structure. Tests co-located: `foo.ts` → `foo.test.ts`.
 - Relative imports use the `.js` extension (NodeNext resolution).
 - Fail fast with explicit error types; never swallow errors.
-- Everything in the repo is in English: code, comments, commits, PRs, docs.
+- Everything in the repo is in English: code, comments, commits, PRs, docs. One deliberate
+  exception: the maintainer's Russian trigger phrases in the `sync` skill ("ОК ЖАБА", "смержил").
 
 ## Workflow
 

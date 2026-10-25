@@ -3,7 +3,7 @@
 > Playwright-style testing for AI agents. Assert on what your agent *did*, not just what it *said*.
 > Run it N times, because one green run proves nothing.
 
-Status: **pre-v0.1 — ADR-001 spike passed, M0 in progress** · Last updated: 2026-10-24
+Status: **pre-v0.1 — M0 done on the code side, review fixes applied** · Last updated: 2026-10-25
 
 Decisions live in [`docs/adr/`](docs/adr/README.md).
 
@@ -22,7 +22,7 @@ Product teams ship LLM agents with observability but without tests.
 
 A test library, not a platform. It lives inside the test runner teams already use.
 
-1. **Collect** OpenTelemetry `gen_ai.*` spans in-process while the test runs (in-memory exporter, no backend needed).
+1. **Collect** OpenTelemetry `gen_ai.*` spans in-process while the test runs (private recording tracer, no backend needed).
 2. **Normalize** them into an `AgentTrace`: steps, model calls, tool calls with args/results, usage, cost, errors.
 3. **Assert** on the trajectory with readable matchers.
 4. **Repeat** the test N times and gate on pass rate, with a flakiness report.
@@ -34,15 +34,20 @@ Because the input is the **standard GenAI semantic conventions**, assertions wor
 ```ts
 import { agentTest, expect, lessThan } from 'toadwright';
 
-agentTest('refund flow stays within policy', { runs: 10, minPassRate: 0.9 }, async ({ trace }) => {
-  await supportAgent.run('I want a refund for order 123');
+agentTest(
+  'refund flow stays within policy',
+  { runs: 10, minPassRate: 0.9, budget: { maxCostUsd: 0.5 } },
+  async ({ trace, signal }) => {
+    // Forward the signal: a budget stop aborts in-flight runs (ADR-003).
+    await supportAgent.run('I want a refund for order 123', { abortSignal: signal });
 
-  expect(trace).toHaveCalledTool('issue_refund', { args: { amount: lessThan(100) } });
-  expect(trace).toCallToolsInOrder(['lookup_order', 'issue_refund']);
-  expect(trace).not.toHaveCalledTool('delete_account');
-  expect(trace).toStayWithin({ steps: 6, costUsd: 0.05 });
-  expect(trace).not.toHaveErrors();
-});
+    expect(trace).toHaveCalledTool('issue_refund', { args: { amount: lessThan(100) } });
+    expect(trace).toCallToolsInOrder(['lookup_order', 'issue_refund']);
+    expect(trace).not.toHaveCalledTool('delete_account');
+    expect(trace).toStayWithin({ steps: 6, costUsd: 0.05 });
+    expect(trace).not.toHaveErrors();
+  },
+);
 ```
 
 ```
@@ -97,10 +102,11 @@ agentTest('refund flow stays within policy', { runs: 10, minPassRate: 0.9 }, asy
 - [x] Spike: span collection & isolation on AI SDK 7, both OTel lines → [ADR-001](docs/adr/0001-span-collection-and-isolation.md).
 - [x] ADR-002…005: statistics, budgets, core layout, repo home.
 - [ ] Claim `toadwright` on npm (0.0.0 placeholder) — maintainer's npm account.
-- [ ] Create `vola-trebla/toadwright` repo; reserve the `toadwright` org — maintainer's GitHub account.
-- [ ] Repo scaffold: TypeScript, ESM, vitest, tsup, Biome, GitHub Actions, Apache-2.0, changesets.
-- [ ] CI matrix: legacy OTel line (API 1.9 / SDK 2.x) and modern line (API 1.10 / SDK 3.0).
-- [ ] Keep pnpm 12 supply-chain policy on (minimum release age); never bypass it to install a fresh version.
+- [x] Create `vola-trebla/toadwright` repo.
+- [ ] Reserve the `toadwright` GitHub org — maintainer's account.
+- [x] Repo scaffold: TypeScript, ESM, vitest, plain `tsc` build, Biome, Apache-2.0, changesets.
+- [x] CI matrix: legacy OTel line (API 1.9 / SDK 2.x) and modern line (API 1.10 / SDK 3.0).
+- [x] Keep pnpm 12 supply-chain policy on (minimum release age); never bypass it to install a fresh version.
 - [ ] Probe article: *"Your agent has observability. It doesn't have tests."* Measure reactions/comments, collect design partners.
 
 ### M1 — v0.1 "Assert" (weeks 1–2)
