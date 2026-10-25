@@ -8,6 +8,9 @@ interface ExportTarget {
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   exports: Record<string, ExportTarget | string>;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 };
 
 const entries = Object.entries(pkg.exports).filter((e): e is [string, ExportTarget] => typeof e[1] !== 'string');
@@ -26,5 +29,16 @@ describe('package exports', () => {
     const url = new URL(source, new URL('./', import.meta.url));
     expect(existsSync(url)).toBe(true);
     await expect(import(url.href)).resolves.toBeDefined();
+  });
+});
+
+describe('package manifest', () => {
+  // ADR-001: OTel SDK packages are allowed as devDependencies (tests only), never at runtime.
+  it('pulls in no OpenTelemetry package but the API, and the API only as a peer', () => {
+    const runtime = { ...pkg.dependencies, ...pkg.optionalDependencies, ...pkg.peerDependencies };
+    const otel = Object.keys(runtime).filter((name) => name.startsWith('@opentelemetry/'));
+    expect(otel).toEqual(['@opentelemetry/api']);
+    expect(pkg.peerDependencies?.['@opentelemetry/api']).toBeDefined();
+    expect(pkg.dependencies?.['@opentelemetry/api']).toBeUndefined();
   });
 });
