@@ -101,15 +101,18 @@ agentTest(
 ### M0 — Foundations (week 0)
 - [x] Spike: span collection & isolation on AI SDK 7, both OTel lines → [ADR-001](docs/adr/0001-span-collection-and-isolation.md).
 - [x] ADR-002…005: statistics, budgets, core layout, repo home.
-- [ ] Claim `toadwright` on npm (0.0.0 placeholder) — maintainer's npm account.
+- [x] ~~Claim `toadwright` on npm with a placeholder~~ — dropped: npm forbids publishing only to reserve a name. First publish moves to M1 (see below).
 - [x] Create `vola-trebla/toadwright` repo.
-- [ ] Reserve the `toadwright` GitHub org — maintainer's account.
+- [x] ~~Reserve the `toadwright` GitHub org~~ — dropped: GitHub forbids holding account names for future use. Create it when the repo moves there ([ADR-005](docs/adr/0005-repository-home.md)).
 - [x] Repo scaffold: TypeScript, ESM, vitest, plain `tsc` build, Biome, Apache-2.0, changesets.
 - [x] CI matrix: legacy OTel line (API 1.9 / SDK 2.x) and modern line (API 1.10 / SDK 3.0).
 - [x] Keep pnpm 12 supply-chain policy on (minimum release age); never bypass it to install a fresh version.
-- [ ] Probe article: *"Your agent has observability. It doesn't have tests."* Measure reactions/comments, collect design partners.
+- [ ] LinkedIn concept post (idea only, no deep tech) — maintainer.
+- [ ] dev.to article #1: OpenTelemetry JS 3.0 transition findings from the ADR-001 spike — maintainer.
 
 ### M1 — v0.1 "Assert" (weeks 1–2)
+- [ ] **First npm publish (`0.1.0-alpha`)** once `agentTest` and the first matchers work end to end — a package with genuine function, not a placeholder.
+- [ ] Small reproducible example agent → reach out to design partners (see §7).
 Goal: deterministic trajectory assertions on a single run.
 - [ ] Span collector per ADR-001: API-only recording tracer, per-test root span, lazy context manager, `NoSpansCollectedError`.
 - [ ] In-house AsyncLocalStorage context manager (drop `@opentelemetry/context-async-hooks`).
@@ -144,7 +147,7 @@ Goal: cheap, deterministic CI runs.
 ### M4 — v0.4 "Reach"
 - [ ] Playwright Test fixture (`test.extend({ trace })`) — agent tests next to E2E tests.
 - [ ] Anthropic SDK support via an OTel instrumentation (evaluate OpenLLMetry / OpenInference) or a thin wrapper.
-- [ ] Legacy Vercel AI SDK `ai.*` spans → normalization adapter (v5/v6 users).
+- [ ] Legacy Vercel AI SDK `ai.*` spans → normalization adapter (v5/v6 users) — **only on real user demand**; v0.x officially supports AI SDK 7+.
 - [ ] Opt-in LLM-judge matcher: `toSatisfy('politely declines refunds over $100')`, itself run N times.
 
 ### M5 — v1.0 "Promote"
@@ -161,13 +164,26 @@ Goal: cheap, deterministic CI runs.
 
 ## 7. Validation plan
 
+**Success criterion:** on one real agent, show that a single green run guarantees nothing and that
+repeated runs measure how reliably the agent behaves. Every milestone serves this demo.
+
 | Step | Signal we want | Kill / pivot signal |
 |---|---|---|
-| Probe article (M0) | ≥ the OTel article baseline (~29 reactions / ~27 comments), people asking "where's the repo" | Silence, or "Tracely/X already does this" with no pushback |
+| dev.to article #1 (OTel findings) | ≥ the OTel article baseline (~29 reactions / ~27 comments), visits to the repo | Silence |
+| Article #2 after M1/M2: "one green run proves nothing" | People asking how to run it on their agent | "Tracely/X already does this" with no pushback |
 | Design partners | 3–5 people from commenters try it on a real agent | Nobody willing to try after 10 conversations |
 | v0.2 release | Stars, issues from strangers, one external PR | No usage outside our own example after ~1 month |
 
 Candidate design partners: commenters on the OTel article who raised real problems (token counting across providers, budget gating on mixed-model routes, PII in traces, streaming token counts).
+
+**Outreach rules.** Start after the collector lands, with a small reproducible example — not after an npm release. The first message is not a pitch and not a request for free testing: describe the idea in two lines and ask how they solve it today. What we want to learn:
+
+- which checks they actually need;
+- what they consider a successful run;
+- how much the statistical gate and the budget guard matter to them;
+- whether they would plug it into a real project.
+
+Do not build features for imagined needs ahead of these answers.
 
 ## 8. Risks
 
@@ -183,14 +199,16 @@ Candidate design partners: commenters on the OTel article who raised real proble
 
 | Question | Answer |
 |---|---|
-| Per-test span isolation | Root span per test + trace-id filter; validated under concurrency ([ADR-001](docs/adr/0001-span-collection-and-isolation.md)) |
+| Per-test span isolation | `toadwright.run` context key, no own spans; validated under concurrency on both OTel lines ([ADR-001](docs/adr/0001-span-collection-and-isolation.md)) |
 | Default pass-rate gate | Observed rate; CI always shown; lower-bound strict mode opt-in ([ADR-002](docs/adr/0002-pass-rate-gating-and-statistics.md)) |
 | Price table | None built in for v0.x; user price map; unknown price fails ([ADR-003](docs/adr/0003-budgets-and-run-limits.md)) |
 | vitest-only vs runner-agnostic | Runner-agnostic core + thin adapters, one package ([ADR-004](docs/adr/0004-runner-agnostic-core.md)) |
-| GitHub home | Personal account, org reserved ([ADR-005](docs/adr/0005-repository-home.md)) |
+| GitHub home | Personal account; org created only when the repo moves ([ADR-005](docs/adr/0005-repository-home.md)) |
+| AI SDK 6 support | Not in v0.x: AI SDK 7+ officially; OTel spans stay the source, other SDKs via adapters on demand |
+| Public API of v0.1 | `agentTest` + matchers only; the core stays internal until its interface stabilizes ([ADR-004](docs/adr/0004-runner-agnostic-core.md)) |
+| When to publish to npm | First release with genuine function (M1), never a placeholder |
 
 ## 10. Open questions
 
 - Shared cross-worker budget ledger: worth it after M2, or is the conservative split enough?
-- Support AI SDK 6 (`ai.*` legacy spans) at all, or AI SDK 7+ only?
 - Which cassette library for M3 (needs its own ADR)?

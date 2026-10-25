@@ -1,7 +1,7 @@
 # ADR-004: Runner-agnostic core with thin adapters
 
 - **Status:** Accepted
-- **Date:** 2026-10-24
+- **Date:** 2026-10-24 · **Amended:** 2026-10-25 (public API scope of v0.1)
 
 ## Decision
 
@@ -12,6 +12,12 @@
   reporter); `toadwright/playwright` in M4 (`test.extend({ trace })`).
 - **One package with subpath exports**, not a monorepo. Runner packages are optional peer
   dependencies.
+- **Public API of v0.1 (amended 2026-10-25):** only `agentTest` and the matchers, from
+  `toadwright/vitest`. The core (collector, `AgentTrace`, orchestration) stays **internal**: built
+  runner-independent and tested on its own, but not exported. A public API is a compatibility
+  contract, and an early low-level API is the hardest part to change. Exporting the core is
+  reconsidered once its interface has been stable across a few releases. Runner independence is an
+  architecture property, not a promise to support every usage of the core.
 
 ## Consequences
 
