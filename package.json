@@ -1,0 +1,76 @@
+{
+  "name": "toadwright",
+  "version": "0.0.0",
+  "description": "Playwright-style testing for AI agents: assert on trajectories from OpenTelemetry gen_ai spans, run N times, gate on pass rate.",
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "testing",
+    "opentelemetry",
+    "gen_ai",
+    "vitest",
+    "evals",
+    "flaky-tests"
+  ],
+  "license": "Apache-2.0",
+  "author": "Albert Alov",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vola-trebla/toadwright.git"
+  },
+  "bugs": "https://github.com/vola-trebla/toadwright/issues",
+  "homepage": "https://github.com/vola-trebla/toadwright#readme",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19"
+  },
+  "packageManager": "pnpm@12.4.2",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./vitest": {
+      "types": "./dist/vitest/index.d.ts",
+      "default": "./dist/vitest/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "changeset": "changeset"
+  },
+  "peerDependencies": {
+    "@ai-sdk/otel": ">=1.0.0",
+    "@opentelemetry/api": ">=1.9.0 <2.0.0",
+    "ai": ">=7.0.0",
+    "vitest": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ai-sdk/otel": "1.0.150",
+    "@biomejs/biome": "2.6.2",
+    "@changesets/cli": "3.0.3",
+    "@opentelemetry/api": "1.10.0",
+    "@types/node": "^22.20.5",
+    "ai": "7.0.150",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
