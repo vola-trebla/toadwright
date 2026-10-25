@@ -8,13 +8,18 @@
 ## The idea
 
 ```ts
-agentTest('refund flow stays within policy', { runs: 10, minPassRate: 0.9 }, async ({ trace }) => {
-  await supportAgent.run('I want a refund for order 123');
+agentTest(
+  'refund flow stays within policy',
+  { runs: 10, minPassRate: 0.9, budget: { maxCostUsd: 0.5 } },
+  async ({ trace, signal }) => {
+    // Forward the signal: a budget stop aborts in-flight runs (ADR-003).
+    await supportAgent.run('I want a refund for order 123', { abortSignal: signal });
 
-  expect(trace).toHaveCalledTool('issue_refund', { args: { amount: lessThan(100) } });
-  expect(trace).toCallToolsInOrder(['lookup_order', 'issue_refund']);
-  expect(trace).toStayWithin({ steps: 6, costUsd: 0.05 });
-});
+    expect(trace).toHaveCalledTool('issue_refund', { args: { amount: lessThan(100) } });
+    expect(trace).toCallToolsInOrder(['lookup_order', 'issue_refund']);
+    expect(trace).toStayWithin({ steps: 6, costUsd: 0.05 });
+  },
+);
 ```
 
 ```

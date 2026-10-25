@@ -14,18 +14,20 @@ The maintainer reviews and merges every PR on GitHub. Your job ends at an open P
      Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`.
      Milestone from ROADMAP.md (`m0`, `m1`, …) when it applies, e.g. `feat/m1-span-collector`, `fix/matcher-diff-output`.
    - On a feature branch: confirm it matches the task; if not, ask.
-2. **Check.** Run `pnpm check`. If it fails, stop and report — do not ship red.
+2. **Changeset.** If `src/` changed in a user-facing way, make sure a `.changeset/*.md` exists
+   (`pnpm changeset`). Docs, CI and internal refactors need none.
+3. **Check.** Run `pnpm check`. If it fails, stop and report — do not ship red.
    - Never run live-mode tests (real API calls) as part of shipping. `pnpm check` must stay offline and free.
-3. **Review what you stage.** `git status --short` and `git diff`.
+4. **Review what you stage.** `git status --short` and `git diff`.
    - Stage files explicitly by path. Never stage `.env*`, `.claude/settings.local.json`,
      local run artifacts (`.toadwright/`), or anything that looks like a secret.
    - Cassettes / recorded LLM fixtures: stage only if they are meant to be committed and contain
      no API keys, auth headers, or real personal data. If unsure, ask.
-4. **Commit.** English, imperative subject ≤ 72 chars, body explains _why_ when not obvious.
+5. **Commit.** English, imperative subject ≤ 72 chars, body explains _why_ when not obvious.
    End with the attribution line from the session instructions, if any.
    One logical change per commit; several small commits are fine.
-5. **Push.** `git push -u origin <branch>`. Never force-push unless the user asks.
-6. **PR.** `gh pr create --base main` with this body:
+6. **Push.** `git push -u origin <branch>`. Never force-push unless the user asks.
+7. **PR.** `gh pr create --base main` with this body:
 
    ```markdown
    ## What
@@ -44,5 +46,5 @@ The maintainer reviews and merges every PR on GitHub. Your job ends at an open P
 
    Title: short and specific, prefixed with the milestone when it applies (`M1: …`).
    End the body with the PR attribution line from the session instructions, if any.
-7. **Report.** Give the PR link and a 2–3 line summary. Then wait for the maintainer.
+8. **Report.** Give the PR link and a 2–3 line summary. Then wait for the maintainer.
    Do not merge, approve, or close the PR.

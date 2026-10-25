@@ -24,19 +24,25 @@ API bill — this failure mode is unacceptable.
 | Limit | Scope | Default | Ceiling |
 |---|---|---|---|
 | `runs` | per test | 1 | 50 without `allowHighRunCount: true` |
-| `maxTotalRuns` | per suite (process) | 200 | configurable |
+| `maxTotalRuns` | per worker (share of suite) | 200 per suite, split as `200 / maxWorkers` | configurable |
 | `maxConcurrency` | per worker | 4 | configurable |
 | `maxCostUsd` / `maxTokens` | per suite | **required in live mode** | — |
 | `perRun.maxTokens` | per run | none | optional |
 
 ### 3. Enforcement
 
-- **Pre-flight:** before the first live call, compute `Σ runs` over selected tests; fail if it
-  exceeds `maxTotalRuns`.
-- **Between runs:** spend is updated from `gen_ai.usage.*` on every finished span. When spend reaches
-  the cap, no new run starts; remaining runs are reported as `skipped: budget`.
-- **In-flight overshoot is bounded and documented.** Runs already in flight may finish, so the
-  overshoot is at most `maxConcurrency × (cost of one run)`. The report prints it.
+- **Pre-flight (per worker):** before the first live call, compute `Σ runs` over the tests this
+  worker will run; fail if it exceeds the worker's share of `maxTotalRuns`.
+- **Spend accounting:** spend is updated from `gen_ai.usage.*` on **inference spans only**
+  (`gen_ai.operation.name` ∈ `chat` / `text_completion` / `generate_content`). Agent and workflow
+  spans (`invoke_agent`) carry totals and are never summed, otherwise spend is counted twice.
+- **On cap:** no new run starts, and every in-flight run's `ctx.signal` is aborted. Aborted runs count
+  as `errored: budget`; never-started runs as `skipped: budget`. Both go through the minimum-runs
+  check of ADR-002, so a budget stop cannot produce a vacuous pass.
+- **Overshoot bound:** at most `maxWorkers × maxConcurrency × (cost of one model call)`, because an
+  aborted run can only finish the model call already in progress. This holds **only if the test
+  passes `ctx.signal` to the agent call** (e.g. `abortSignal` in AI SDK). Docs and the README
+  example must show it, and the report prints the actual overshoot.
 - **Per-run guard:** when `perRun.maxTokens` is exceeded, the run's `AbortSignal` (exposed to the
   test as `ctx.signal`) is aborted and the run counts as `errored: budget`.
 
@@ -71,6 +77,7 @@ source.
 
 - ✅ CI cannot spend money by accident: three independent gates (opt-in mode, required budget,
   CI env flag).
-- ✅ Spend is bounded even with high concurrency, with a documented worst case.
+- ✅ Spend is bounded even with high concurrency, with a documented worst case — provided tests
+  forward `ctx.signal`. Without it, a looping in-flight run is bounded only by `perRun.maxTokens`.
 - ⚠️ More configuration for live mode. Intentional friction.
 - ⚠️ Conservative per-worker split may stop suites early on many workers.

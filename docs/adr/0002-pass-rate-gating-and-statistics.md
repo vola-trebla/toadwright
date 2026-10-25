@@ -18,7 +18,10 @@ honest description of what the numbers mean.
 4. **Infrastructure errors are not behavioral failures.** Rate limits, 5xx responses, timeouts and
    budget aborts are counted separately as `errored`, excluded from the pass rate, and fail the test
    when they exceed a threshold (default: any errored run fails the test with a clear message).
-5. **Minimum runs.** `minPassRate < 1` requires `runs >= 5`; otherwise configuration fails.
+5. **Minimum runs, checked twice.** `minPassRate < 1` requires `runs >= 5` at config time **and**
+   `completed >= 5` at gate time. Fewer completed runs (budget stop, errors, skips) fail the test
+   with an explicit message, e.g. `insufficient runs: 1/10 completed (9 skipped: budget)`. A gate
+   over zero completed runs is always a failure, never `0/0`.
 
 ### Why not gate on the lower bound by default
 

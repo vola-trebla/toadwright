@@ -34,8 +34,10 @@ The OTel JS ecosystem is mid-transition: `@opentelemetry/api` 1.10 and SDK 3.0 s
 5. **Hands off globals.** toadwright never calls `trace.setGlobalTracerProvider`,
    `propagation.setGlobalPropagator`, or `diag.setLogger`.
 6. **Dependency policy.**
-   - `@opentelemetry/api`: **peer** dependency, `>=1.9.0 <2.0.0`. Never a direct dependency.
-   - `ai` (`>=7`) and `@ai-sdk/otel`: peer dependencies.
+   - `@opentelemetry/api`: **peer** dependency, `>=1.9.1 <2.0.0` (1.9.1 is the lowest version CI tests).
+     Never a direct dependency.
+   - `ai` (`^7.0.0`), `@ai-sdk/otel` (`^1.0.0`) and, optionally, `vitest` (`^5.0.0`): peer dependencies.
+     Ranges never promise more than CI tests.
    - No `@opentelemetry/sdk-*` packages.
    - The context manager becomes an in-house ~50-line AsyncLocalStorage implementation in M1,
      replacing `@opentelemetry/context-async-hooks`, whose peer range caps the API at `<1.11`.
@@ -56,8 +58,10 @@ AI SDK `ai@7.0.150`, `@ai-sdk/otel@1.0.150`, vitest 5.0.5, Node 22.
 | S5 toadwright first: app telemetry still works | ✅ (1 diag error) | ✅ (1 diag error) | ✅ (1 diag error) |
 | Peer ranges satisfiable | ✅ | ✅ | ✅ recording only — SDK 2.x requires API `<1.10` |
 
-27 tests per configuration. Mutation checks confirmed the suite has teeth: removing the trace-id
-filter, skipping the context manager, or ignoring the parent context each turns 11–18 tests red.
+27 tests per configuration; 3 of them only log (parentage, diag noise, a filler assertion) and
+cannot fail — the "(1 diag error)" cells are read from console output, not asserted. Mutation checks
+confirmed the remaining suite has teeth: removing the trace-id filter, skipping the context manager,
+or ignoring the parent context each turns 11–18 tests red (an independent review re-run got 15–18).
 
 Captured tree for a 2-tool agent:
 
@@ -87,7 +91,10 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
 4. **`recordInputs: false` / `recordOutputs: false` strip tool arguments and results.** Spans still
    exist, so argument matchers must fail with "content not recorded", not "arguments mismatch".
 5. **Cross-provider parentage.** The app's `invoke_agent` span is parented on the toadwright test
-   span, whose id the app never exports. Harmless in test environments; documented.
+   span, whose id the app never exports. With toadwright active, the app's exported trace therefore
+   has a missing root. The spike only compared span **names**, so this is not covered by an assertion.
+   Test environments only; documented. A context-key design that leaves the app's tree untouched is
+   the first M1 spike (see follow-ups).
 6. **Init order matters only for the context manager.** If toadwright installs it before the app's
    `NodeSDK.start()`, the API logs one "duplicate registration of API: context" error. App telemetry
    keeps working because both managers are AsyncLocalStorage-based. Mitigation: lazy install plus docs
@@ -102,17 +109,24 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
 ## Consequences
 
 - ✅ Works on both OTel lines with one code path and zero SDK dependencies.
-- ✅ App telemetry output is byte-for-byte the same set of spans with and without toadwright.
+- ✅ The app exports the same spans with the same attributes, with and without toadwright.
+- ⚠️ Not identical: the app's root `gen_ai` span is parented on an unexported toadwright span
+  (finding 5). Test environments only.
 - ⚠️ We own a small `Tracer`/`Span` implementation. The API surface is stable 1.x, but new optional
   methods must be tracked.
 - ⚠️ v0.x supports AI SDK 7 natively. Other instrumentations need their own adapter (M4).
 
 ### Follow-ups for M1
 
-- [ ] In-house AsyncLocalStorage context manager; re-run the spike suite against it.
+- [ ] **Spike first:** replace the per-test root span with a context key (`toadwright.run`) and
+  bucket spans by it in the recording tracer, so the app's span tree is unchanged. Re-run S1–S5;
+  if it holds, supersede the root-span part of this ADR.- [ ] In-house AsyncLocalStorage context manager; re-run the spike suite against it.
 - [ ] Detect spans still open when the test body returns ("2 spans still open — did you consume the stream?").
 - [ ] `ContentNotRecordedError` for argument/result matchers.
-- [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix.
+- [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix. Turn the
+  log-only tests into assertions: app root parent id, exactly one diag error matching
+  "duplicate registration of API: context"; drop the filler assertion. Compare span shape
+  (parent, attributes), not only names.
 
 ## Alternatives considered
 

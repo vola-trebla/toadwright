@@ -49,14 +49,15 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "changeset": "changeset"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm smoke",
+    "changeset": "changeset",
+    "smoke": "node --input-type=module -e \"await import('toadwright'); await import('toadwright/vitest')\""
   },
   "peerDependencies": {
-    "@ai-sdk/otel": ">=1.0.0",
-    "@opentelemetry/api": ">=1.9.0 <2.0.0",
-    "ai": ">=7.0.0",
-    "vitest": ">=4.0.0"
+    "@ai-sdk/otel": "^1.0.0",
+    "@opentelemetry/api": ">=1.9.1 <2.0.0",
+    "ai": "^7.0.0",
+    "vitest": "^5.0.0"
   },
   "peerDependenciesMeta": {
     "vitest": {
