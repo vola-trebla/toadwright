@@ -9,8 +9,12 @@ import { InMemorySpanExporter, type ReadableSpan, SimpleSpanProcessor } from '@o
 import { registerTelemetry } from 'ai';
 
 export interface AppTelemetry {
+  /** The app's AI SDK integration, as registered with `registerTelemetry`. */
+  readonly integration: OpenTelemetry;
   /** Spans the app exported so far (stands in for the app's OTLP backend). */
   exportedSpans(): Promise<ReadableSpan[]>;
+  /** Forgets exported spans, so each test sees only its own. */
+  reset(): void;
   shutdown(): Promise<void>;
 }
 
@@ -23,13 +27,16 @@ export function startAppTelemetry(): AppTelemetry {
   const processor = new SimpleSpanProcessor({ exporter });
   const sdk = new NodeSDK({ spanProcessors: [processor], instrumentations: [] });
   sdk.start();
-  registerTelemetry(new OpenTelemetry());
+  const integration = new OpenTelemetry();
+  registerTelemetry(integration);
   return {
+    integration,
     // NodeSDK detects resources asynchronously; SimpleSpanProcessor exports only after that.
     exportedSpans: async () => {
       await processor.forceFlush();
       return exporter.getFinishedSpans();
     },
+    reset: () => exporter.reset(),
     shutdown: () => sdk.shutdown(),
   };
 }
