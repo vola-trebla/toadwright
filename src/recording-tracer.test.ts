@@ -18,6 +18,17 @@ describe('RecordingTracer', () => {
     expect(recorded?.endTime).toBeDefined();
   });
 
+  it('tracks spans that have started but not ended', () => {
+    const tracer = new RecordingTracer();
+    const first = tracer.startSpan('invoke_agent');
+    const second = tracer.startSpan('chat');
+    expect(tracer.getOpenSpans().map((s) => s.name)).toEqual(['invoke_agent', 'chat']);
+    second.end();
+    expect(tracer.getOpenSpans().map((s) => s.name)).toEqual(['invoke_agent']);
+    first.end();
+    expect(tracer.getOpenSpans()).toHaveLength(0);
+  });
+
   it('takes the parent and trace id from the given context', () => {
     const tracer = new RecordingTracer();
     const parent = tracer.startSpan('invoke_agent');

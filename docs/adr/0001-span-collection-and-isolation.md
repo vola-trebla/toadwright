@@ -121,8 +121,12 @@ invoke_agent mock-support-1        ← gen_ai.agent.name, usage totals, input/ou
 ### Follow-ups for M1
 
 - [x] **Spike first:** replace the per-test root span with a context key (`toadwright.run`) and
-  bucket spans by it in the recording tracer. Done — see "Context-key re-run".- [ ] In-house AsyncLocalStorage context manager; re-run the spike suite against it.
-- [ ] Detect spans still open when the test body returns ("2 spans still open — did you consume the stream?").
+  bucket spans by it in the recording tracer. Done — see "Context-key re-run".
+- [x] In-house AsyncLocalStorage context manager (`src/context-manager.ts`). Re-running the
+  scenarios against it is part of porting S1–S5.
+- [x] Detect spans still open when the test body returns ("2 spans still open — did you consume the stream?"):
+  `OpenSpansError` in `src/collector.ts`. AI SDK starts spans asynchronously, so the collector yields
+  one macrotask after the body returns before it checks.
 - [ ] `ContentNotRecordedError` for argument/result matchers.
 - [ ] Port S1–S5 into the package's own test suite and the legacy/modern CI matrix (the log-only
   tests are already assertions in the spike since the re-run).

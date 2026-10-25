@@ -107,17 +107,17 @@ agentTest(
 - [x] Repo scaffold: TypeScript, ESM, vitest, plain `tsc` build, Biome, Apache-2.0, changesets.
 - [x] CI matrix: legacy OTel line (API 1.9 / SDK 2.x) and modern line (API 1.10 / SDK 3.0).
 - [x] Keep pnpm 12 supply-chain policy on (minimum release age); never bypass it to install a fresh version.
-- [ ] LinkedIn concept post (idea only, no deep tech) — maintainer.
-- [ ] dev.to article #1: OpenTelemetry JS 3.0 transition findings from the ADR-001 spike — maintainer.
+- [x] LinkedIn concept post (idea only, no deep tech) — maintainer.
+- [x] dev.to article #1: OpenTelemetry JS 3.0 transition findings from the ADR-001 spike — maintainer.
 
 ### M1 — v0.1 "Assert" (weeks 1–2)
 - [ ] **First npm publish (`0.1.0-alpha`)** once `agentTest` and the first matchers work end to end — a package with genuine function, not a placeholder.
 - [ ] Small reproducible example agent → reach out to design partners (see §7).
 Goal: deterministic trajectory assertions on a single run.
-- [ ] Span collector per ADR-001: API-only recording tracer, per-test root span, lazy context manager, `NoSpansCollectedError`.
-- [ ] In-house AsyncLocalStorage context manager (drop `@opentelemetry/context-async-hooks`).
+- [x] Span collector per ADR-001: API-only recording tracer, per-run context key, lazy context manager, `NoSpansCollectedError`.
+- [x] In-house AsyncLocalStorage context manager (drop `@opentelemetry/context-async-hooks`).
 - [ ] Port spike scenarios S1–S5 into the package test suite; run them on both OTel lines in CI.
-- [ ] Detect spans still open when the test body returns (unconsumed streams).
+- [x] Detect spans still open when the test body returns (unconsumed streams): `OpenSpansError`.
 - [ ] `ContentNotRecordedError` when argument/result matchers meet `recordInputs/recordOutputs: false`.
 - [ ] `AgentTrace` model: normalize `invoke_agent` / `chat` / `execute_tool` spans; tool args/results; usage; `error.type`.
 - [ ] Pin a semconv version; isolate attribute names in one mapping module (the spec is still *Development*).
