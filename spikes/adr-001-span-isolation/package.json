@@ -1,0 +1,20 @@
+{
+  "name": "spike-adr-001-span-isolation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@ai-sdk/otel": "1.0.150",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/context-async-hooks": "3.0.0",
+    "@opentelemetry/sdk-node": "0.300.0",
+    "@opentelemetry/sdk-trace": "3.0.0",
+    "@types/node": "^22.20.5",
+    "ai": "7.0.150",
+    "typescript": "^7.0.2",
+    "vitest": "5.0.5",
+    "zod": "^4.6.7"
+  }
+}
