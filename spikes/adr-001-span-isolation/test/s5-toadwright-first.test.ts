@@ -20,7 +20,8 @@ describe('S5 toadwright first, app bootstraps NodeSDK later', () => {
     expect(spanNames(await appSpans())).toHaveLength(9);
   });
 
-  it('records the diag noise this order produces (finding)', () => {
-    console.log(`S5[${collector.impl}] diag messages:`, JSON.stringify(diagMessages.map((m) => m.split('\n')[0])));
+  it('logs exactly one duplicate-registration error, nothing else (finding)', () => {
+    expect(diagMessages).toHaveLength(1);
+    expect(diagMessages[0]).toMatch(/duplicate registration of API: context/);
   });
 });

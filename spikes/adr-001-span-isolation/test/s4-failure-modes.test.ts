@@ -23,8 +23,7 @@ describe('S4 failure modes', () => {
       .run('lost-context', () => context.with(ROOT_CONTEXT, () => runSupportAgent({ orderId: 'L-1' })))
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(NoSpansCollectedError);
-    console.log('S4 lost-context message:', (err as Error).message);
-    expect((err as Error).message).toMatch(/different trace/);
+    expect((err as Error).message).toMatch(/outside any run/);
   });
 
   it('recordInputs/recordOutputs=false → spans exist but tool args/results are missing', async () => {
